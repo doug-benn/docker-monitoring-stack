@@ -1,4 +1,6 @@
 from flask import Flask
+import time 
+import sys
 
 app = Flask(__name__)
 
@@ -8,4 +10,6 @@ def hello():
 
 
 if __name__ == "__main__":
+    time.sleep(10)
+    sys.exit()
     app.run(host='0.0.0.0', port=8000)
