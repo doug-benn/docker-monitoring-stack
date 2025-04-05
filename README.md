@@ -1,5 +1,9 @@
-# docker-monitoring-stack-gpnc
-Grafana Prometheus Node-Exporter cAdvisor Loki - Docker Monitoring Stack
+# docker-monitoring-stack
+Grafana Prometheus cAdvisor Loki - Docker Monitoring Stack
+
+> **_NOTE:_**  This is a Fork of [docker-monitoring-stack-gpnc](https://github.com/ruanbekker/docker-monitoring-stack-gpnc) that has been customised
+
+
 
 ## About
 

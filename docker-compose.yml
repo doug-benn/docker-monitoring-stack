@@ -1,39 +1,32 @@
-version: '3.8'
+name: docker-monitoring-stack
 
-x-logging:
-  &default-logging
-  driver: "json-file"
+x-logging: &default-logging
+  driver: 'json-file'
   options:
-    max-size: "1m"
-    max-file: "1"
-    tag: "{{.Name}}"
+    max-size: '1m'
+    max-file: '1'
+    tag: '{{.Name}}'
 
 x-common-labels: &default-labels
-  logging: "promtail"
-  logging_jobname: "containerlogs"
-  stackname: "docker-monitoring-stack-gpnc"
+  logging: 'promtail'
+  logging_jobname: 'containerlogs'
+  stackname: 'docker-monitoring-stack'
 
 services:
   grafana:
-    image: grafana/grafana:${GRAFANA_VERSION:-11.6.0}
+    image: grafana/grafana:latest
     container_name: grafana
     restart: unless-stopped
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_USERS_DEFAULT_THEME=light
       - GF_LOG_MODE=console
       - GF_LOG_LEVEL=critical
       - GF_PANELS_ENABLE_ALPHA=true
       - GF_FEATURE_TOGGLES_ENABLE=accessControlOnCall lokiLogsDataplane
       - GF_INSTALL_PLUGINS=grafana-polystat-panel,https://storage.googleapis.com/integration-artifacts/grafana-lokiexplore-app/grafana-lokiexplore-app-latest.zip;grafana-lokiexplore-app
     volumes:
-      - ./configs/grafana/provisioning/dashboards.yml:/etc/grafana/provisioning/dashboards/provisioning-dashboards.yaml:ro
-      - ./configs/grafana/provisioning/datasources.yml:/etc/grafana/provisioning/datasources/provisioning-datasources.yaml:ro
-      - ./configs/grafana/plugins/app.yaml:/etc/grafana/provisioning/plugins/app.yaml:ro
-      - ./dashboards/node-metrics.json:/var/lib/grafana/dashboards/node-metrics.json:ro
-      - ./dashboards/container-metrics.json:/var/lib/grafana/dashboards/container-metrics.json:ro
-      - ./dashboards/log-search.json:/var/lib/grafana/dashboards/log-search.json:ro
+      - ./configs/grafana/:/etc/grafana/provisioning/:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
@@ -48,11 +41,11 @@ services:
     logging: *default-logging
 
   prometheus:
-    image: prom/prometheus:${PROMETHEUS_VERSION:-v2.42.0}
+    image: prom/prometheus:latest
     container_name: prometheus
     restart: unless-stopped
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/prometheus/prometheus.yaml'
       - '--log.level=error'
       - '--storage.tsdb.path=/prometheus'
       - '--storage.tsdb.retention.time=7d'
@@ -60,9 +53,10 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.external-url=http://localhost:9090'
     volumes:
-      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./configs/prometheus/recording-rules.yml:/etc/prometheus/recording-rules.yml
-      - ./configs/prometheus/alerting-rules.yml:/etc/prometheus/alerting-rules.yml
+      - ./configs/prometheus/:/etc/prometheus/
+      # - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      # - ./configs/prometheus/recording-rules.yml:/etc/prometheus/recording-rules.yml
+      # - ./configs/prometheus/alerting-rules.yml:/etc/prometheus/alerting-rules.yml
       - prometheus-data:/prometheus
     depends_on:
       - alertmanager
@@ -77,7 +71,7 @@ services:
     logging: *default-logging
 
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:${CADVISOR_VERSION:-v0.46.0}
+    image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
     restart: unless-stopped
     privileged: true
@@ -109,7 +103,7 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.ignored-mount-points'
-      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+      - '^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)'
     cpus: 0.5
     mem_limit: 512m
     networks:
@@ -119,7 +113,7 @@ services:
     logging: *default-logging
 
   alertmanager:
-    image: prom/alertmanager:${ALERTMANAGER_VERSION:-v0.25.0}
+    image: prom/alertmanager:v0.28.1
     container_name: alertmanager
     command:
       - '--config.file=/etc/alertmanager/config.yml'
@@ -128,6 +122,7 @@ services:
       - '--web.external-url=http://localhost:9093'
     volumes:
       - ./configs/alertmanager/alertmanager-fallback-config.yml:/etc/alertmanager/config.yml
+      - alertmanager-data:/alertmanager
     ports:
       - 9093:9093
     cpus: 0.5
@@ -145,19 +140,6 @@ services:
     container_name: uncomplicated-alert-receiver
     ports:
       - 9094:8080
-    cpus: 0.5
-    mem_limit: 512m
-    networks:
-      - monitoring
-    labels:
-      <<: *default-labels
-    logging: *default-logging
-
-  redis:
-    image: redis:${REDIS_VERSION:-6}
-    container_name: redis
-    ports:
-      - 6379:6379
     cpus: 0.5
     mem_limit: 512m
     networks:
@@ -185,7 +167,7 @@ services:
     logging: *default-logging
 
   promtail:
-    image:  grafana/promtail:3.3.2
+    image: grafana/promtail:3.3.2
     container_name: promtail
     volumes:
       - ./configs/promtail/promtail.yaml:/etc/promtail/docker-config.yaml
@@ -202,9 +184,102 @@ services:
       <<: *default-labels
     logging: *default-logging
 
+  ### Exporters ###
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: 'postgresql://${POSTGRES_USER}:${POSTGRES_PW}@postgres:5432/${POSTGRES_DB}?sslmode=disable'
+    cpus: 0.5
+    mem_limit: 512m
+    networks:
+      - monitoring
+    labels:
+      <<: *default-labels
+    logging: *default-logging
+
+  nginx-prometheus-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: prometheus-nginx-exporter
+    restart: unless-stopped
+    depends_on:
+      - nginx
+      - prometheus
+    command:
+      - --nginx.scrape-uri=http://nginx/stub_status
+    cpus: 0.5
+    mem_limit: 512m
+    networks:
+      - monitoring
+    ports:
+      - '9113:9113'
+    labels:
+      <<: *default-labels
+    logging: *default-logging
+
+  #################
+
+  ### DEMO APPLICATIONS ###
+  postgres:
+    container_name: postgres
+    image: postgres:17.4-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PW}
+      - POSTGRES_DB=${POSTGRES_DB} #optional (specify default database instead of $POSTGRES_DB)
+    ports:
+      - '5432:5432'
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready  -U ${POSTGRES_USER}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - monitoring
+    labels:
+      <<: *default-labels
+    logging: *default-logging
+
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      #- '8080:8080'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - monitoring
+    labels:
+      <<: *default-labels
+    logging: *default-logging
+
+  app:
+    build:
+      context: ./demo-app
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 3
+    networks:
+      - monitoring
+    labels:
+      <<: *default-labels
+    logging: *default-logging
+
+#########################
+
 volumes:
-  grafana-data: {}
-  prometheus-data: {}
+  grafana-data:
+  prometheus-data:
+  alertmanager-data:
+  # Demo
+  postgres-data:
 
 networks:
   monitoring:
