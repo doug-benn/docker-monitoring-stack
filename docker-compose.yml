@@ -14,7 +14,9 @@ x-common-labels: &default-labels
 
 services:
   grafana:
-    image: grafana/grafana:latest
+    build:
+      context: ./
+      dockerfile: ./images/grafana/Dockerfile
     container_name: grafana
     restart: unless-stopped
     environment:
@@ -26,7 +28,7 @@ services:
       - GF_FEATURE_TOGGLES_ENABLE=accessControlOnCall lokiLogsDataplane
       - GF_INSTALL_PLUGINS=grafana-polystat-panel,https://storage.googleapis.com/integration-artifacts/grafana-lokiexplore-app/grafana-lokiexplore-app-latest.zip;grafana-lokiexplore-app
     volumes:
-      - ./configs/grafana/:/etc/grafana/provisioning/:ro
+      #- ./configs/grafana/:/etc/grafana/provisioning/:ro
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
@@ -41,7 +43,9 @@ services:
     logging: *default-logging
 
   prometheus:
-    image: prom/prometheus:latest
+    build:
+      context: ./
+      dockerfile: ./images/prometheus/Dockerfile
     container_name: prometheus
     restart: unless-stopped
     command:
@@ -53,7 +57,7 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
       - '--web.external-url=http://localhost:9090'
     volumes:
-      - ./configs/prometheus/:/etc/prometheus/
+      # - ./configs/prometheus/:/etc/prometheus/
       # - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       # - ./configs/prometheus/recording-rules.yml:/etc/prometheus/recording-rules.yml
       # - ./configs/prometheus/alerting-rules.yml:/etc/prometheus/alerting-rules.yml
@@ -113,15 +117,17 @@ services:
     logging: *default-logging
 
   alertmanager:
-    image: prom/alertmanager:v0.28.1
+    build:
+      context: ./
+      dockerfile: ./images/alertmanager/Dockerfile
     container_name: alertmanager
     command:
       - '--config.file=/etc/alertmanager/config.yml'
-      - '--log.level=error'
+      - '--log.level=info'
       - '--storage.path=/alertmanager'
       - '--web.external-url=http://localhost:9093'
     volumes:
-      - ./configs/alertmanager/alertmanager-fallback-config.yml:/etc/alertmanager/config.yml
+      # - ./configs/alertmanager/alertmanager-fallback-config.yml:/etc/alertmanager/config.yml
       - alertmanager-data:/alertmanager
     ports:
       - 9093:9093
@@ -149,15 +155,17 @@ services:
     logging: *default-logging
 
   loki:
-    image: grafana/loki:3.3.2
+    build:
+      context: ./
+      dockerfile: ./images/loki/Dockerfile
     container_name: loki
     user: root
     ports:
       - 3100:3100
     command: -config.file=/etc/loki/loki.yaml
-    volumes:
-      - ./configs/loki/loki.yaml:/etc/loki/loki.yaml
-      - ./configs/loki/rules.yaml:/etc/loki/rules/fake/loki-rules.yml
+    #volumes:
+    # - ./configs/loki/loki.yaml:/etc/loki/loki.yaml
+    # - ./configs/loki/rules.yaml:/etc/loki/rules/fake/loki-rules.yml
     cpus: 0.5
     mem_limit: 512m
     networks:
@@ -167,10 +175,12 @@ services:
     logging: *default-logging
 
   promtail:
-    image: grafana/promtail:3.3.2
+    build:
+      context: ./
+      dockerfile: ./images/promtail/Dockerfile
     container_name: promtail
     volumes:
-      - ./configs/promtail/promtail.yaml:/etc/promtail/docker-config.yaml
+      # - ./configs/promtail/promtail.yaml:/etc/promtail/docker-config.yaml
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
     command: -config.file=/etc/promtail/docker-config.yaml
@@ -183,6 +193,16 @@ services:
     labels:
       <<: *default-labels
     logging: *default-logging
+
+  pyroscope:
+    image: grafana/pyroscope:latest
+    ports:
+      - '4040:4040'
+    command:
+      - 'server'
+    restart: unless-stopped
+    networks:
+      - monitoring
 
   ### Exporters ###
   postgres-exporter:

@@ -14,7 +14,7 @@ datasources:
     url: http://alertmanager:9093
     access: proxy
     jsonData:
-      implementation: 'prometheus' 
+      implementation: 'prometheus'
     basicAuth: false
     #basicAuthUser: my_user
     #basicAuthPassword: test_password
@@ -25,3 +25,6 @@ datasources:
     version: 1
     editable: false
     isDefault: false
+  - name: Pyroscope
+    type: grafana-pyroscope-datasource
+    url: http://pyroscope:4040
